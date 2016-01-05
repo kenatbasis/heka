@@ -35,8 +35,10 @@ type ElasticSearchCoordinates struct {
 }
 
 // Renders the coordinates of the ElasticSearch document as JSON.
-func (e *ElasticSearchCoordinates) PopulateBuffer(m *message.Message, buf *bytes.Buffer) {
-	buf.WriteString(`{"index":{"_index":`)
+func (e *ElasticSearchCoordinates) PopulateBuffer(action string, m *message.Message, buf *bytes.Buffer) {
+	buf.WriteString(`{"`)
+	buf.WriteString(action)
+	buf.WriteString(`":{"_index":`)
 
 	var (
 		err         error

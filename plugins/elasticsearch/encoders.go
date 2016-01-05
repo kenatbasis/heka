@@ -238,6 +238,8 @@ type ESJsonEncoder struct {
 	fieldMappings     *ESFieldMappings
 	dynamicFields     []string
 	usesDynamicFields bool
+    action            string
+    docAsUpsert       bool
 }
 
 // Heka fields to ElasticSearch mapping
@@ -275,6 +277,10 @@ type ESJsonEncoderConfig struct {
 	// Dynamic fields to be included. Non-empty value raises an error if
 	// 'DynamicFields' is not in Fields []string property.
 	DynamicFields []string `toml:"dynamic_fields"`
+	// ElasticSearch Bulk API action ('index' or 'update')
+	Action string
+	// ElasticSearch update option "doc_as_upsert"
+	DocAsUpsert bool `toml:"doc_as_upsert"`
 }
 
 func (e *ESJsonEncoder) ConfigStruct() interface{} {
@@ -284,6 +290,8 @@ func (e *ESJsonEncoder) ConfigStruct() interface{} {
 		Timestamp:            "%Y-%m-%dT%H:%M:%S",
 		ESIndexFromTimestamp: false,
 		Id:                   "",
+		Action:               "index",
+		DocAsUpsert:          false,
 		FieldMappings: &ESFieldMappings{
 			Timestamp:  "Timestamp",
 			Uuid:       "Uuid",
@@ -315,6 +323,8 @@ func (e *ESJsonEncoder) Init(config interface{}) (err error) {
 	}
 	e.fieldMappings = conf.FieldMappings
 	e.dynamicFields = conf.DynamicFields
+    e.action = conf.Action
+    e.docAsUpsert = conf.DocAsUpsert
 
 	usesDynamicFields := false
 	for i, f := range e.fields {
@@ -341,9 +351,18 @@ func (e *ESJsonEncoder) Init(config interface{}) (err error) {
 func (e *ESJsonEncoder) Encode(pack *PipelinePack) (output []byte, err error) {
 	m := pack.Message
 	buf := bytes.Buffer{}
-	e.coord.PopulateBuffer(pack.Message, &buf)
+	e.coord.PopulateBuffer(e.action, pack.Message, &buf)
 	buf.WriteByte(NEWLINE)
-	buf.WriteString(`{`)
+    switch e.action {
+    case "index":
+        buf.WriteString(`{`)
+    case "update":
+        buf.WriteString(`{"doc":{`)
+    default:
+        err = fmt.Errorf("Action is not one of 'index' or 'update': %s", e.action)
+        return
+    }
+
 	first := true
 
 	for _, f := range e.fields {
@@ -402,7 +421,19 @@ func (e *ESJsonEncoder) Encode(pack *PipelinePack) (output []byte, err error) {
 		first = false
 	}
 
-	buf.WriteString(`}`)
+    switch e.action {
+    case "index":
+        buf.WriteString(`}`)
+    case "update":
+        if e.docAsUpsert {
+            buf.WriteString(`},"doc_as_upsert":true}`)
+        } else {
+            buf.WriteString(`}}`)
+        }
+    default:
+        err = fmt.Errorf("Action is not one of 'index' or 'update': %s", e.action)
+        return
+    }
 	buf.WriteByte(NEWLINE)
 	return buf.Bytes(), err
 }
@@ -498,7 +529,7 @@ func (e *ESLogstashV0Encoder) Init(config interface{}) (err error) {
 func (e *ESLogstashV0Encoder) Encode(pack *PipelinePack) (output []byte, err error) {
 	m := pack.Message
 	buf := bytes.Buffer{}
-	e.coord.PopulateBuffer(pack.Message, &buf)
+	e.coord.PopulateBuffer("index", pack.Message, &buf)
 	buf.WriteByte(NEWLINE)
 	buf.WriteString(`{`)
 
