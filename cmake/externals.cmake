@@ -173,8 +173,12 @@ if (INCLUDE_MOZSVC)
     add_dependencies(heka-mozsvc-plugins raven-go)
 endif()
 
+if (INCLUDE_RIEMANN)
+    add_external_plugin(git https://github.com/cspenceiv/heka-riemann-encoder f2f023f57d67e710616b7e39c36cd0502518fd74)
+endif()
+
 git_clone(https://github.com/pborman/uuid ca53cad383cad2479bbba7f7a1a05797ec1386e4)
-git_clone(https://github.com/gogo/protobuf 7d21ffbc76b992157ec7057b69a1529735fbab21)
+git_clone(https://github.com/gogo/protobuf 96645b922e3a180d3870783ce27a6c955504e212)
 add_custom_command(TARGET protobuf POST_BUILD
 COMMAND ${GO_EXECUTABLE} install github.com/gogo/protobuf/protoc-gen-gogo)
 
